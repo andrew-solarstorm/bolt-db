@@ -58,11 +58,11 @@ func (b *BoltDatabase) Close() error {
 //   - error: An error if the bucket doesn't exist or deletion fails
 func (b *BoltDatabase) Delete(bucketName string, key string) error {
 	return b.db.Batch(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		if b == nil {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
 			return errors.New("bucket not found")
 		}
-		return b.Delete([]byte(key))
+		return bucket.Delete([]byte(key))
 	})
 }
 
@@ -78,11 +78,11 @@ func (b *BoltDatabase) Delete(bucketName string, key string) error {
 //   - error: An error if the operation fails
 func (b *BoltDatabase) Set(bucketName string, key string, value []byte) error {
 	return b.db.Batch(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte(bucketName))
+		bucket, err := tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
 			return err
 		}
-		return b.Put([]byte(key), value)
+		return bucket.Put([]byte(key), value)
 	})
 }
 
@@ -99,12 +99,12 @@ func (b *BoltDatabase) Set(bucketName string, key string, value []byte) error {
 func (b *BoltDatabase) Get(bucketName, key string) ([]byte, error) {
 	var result []byte
 	err := b.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		if b == nil {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
 			return nil
 		}
 
-		result = b.Get([]byte(key))
+		result = bucket.Get([]byte(key))
 		return nil
 	})
 
@@ -123,11 +123,11 @@ func (b *BoltDatabase) Get(bucketName, key string) ([]byte, error) {
 func (b *BoltDatabase) List(bucketName string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
 	err := b.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		if b == nil {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
 			return nil
 		}
-		return b.ForEach(func(k, v []byte) error {
+		return bucket.ForEach(func(k, v []byte) error {
 			result[string(k)] = v
 			return nil
 		})
@@ -167,11 +167,11 @@ func (b *BoltDatabase) Buckets() []string {
 //   - error: Any error that occurred during the operation
 func (b *BoltDatabase) ForEach(bucketName string, fn func(key, value []byte) error) error {
 	return b.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		if b == nil {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
 			return nil
 		}
-		return b.ForEach(func(k, v []byte) error {
+		return bucket.ForEach(func(k, v []byte) error {
 			return fn(k, v)
 		})
 	})
