@@ -78,3 +78,15 @@ func (w *BoltDBWrapper) Delete(key string) error {
 func (w *BoltDBWrapper) List() (map[string][]byte, error) {
 	return w.db.List(w.bucketName)
 }
+
+// ForEach iterates over all key-value pairs in the configured bucket.
+// This is a convenience method that automatically uses the wrapper's bucket name.
+//
+// Parameters:
+//   - fn: A function that will be called for each key-value pair
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+func (w *BoltDBWrapper) ForEach(fn func(key, value []byte) error) error {
+	return w.db.ForEach(w.bucketName, fn)
+}

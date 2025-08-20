@@ -76,6 +76,34 @@ err := userWrapper.Set("user1", []byte("John Doe"))
 value, err := userWrapper.Get("user1")
 ```
 
+## Using ForEach for Iteration
+
+```go
+db := boltfactory.NewBoltDatabase("./app.db")
+defer db.Close()
+
+// Store some data first
+db.Set("users", "user1", []byte("John Doe"))
+db.Set("users", "user2", []byte("Jane Smith"))
+
+// Iterate over all key-value pairs in a bucket
+err := db.ForEach("users", func(key, value []byte) error {
+    fmt.Printf("Key: %s, Value: %s\n", string(key), string(value))
+    return nil
+})
+
+// Using wrapper for iteration
+userWrapper := boltfactory.NewBoltDBWrapper(db, "users")
+err = userWrapper.ForEach(func(key, value []byte) error {
+    fmt.Printf("User %s: %s\n", string(key), string(value))
+    return nil
+})
+
+// List all buckets in the database
+buckets := db.Buckets()
+fmt.Printf("Available buckets: %v\n", buckets)
+```
+
 ## Using Batch Operations
 
 ```go
@@ -122,6 +150,8 @@ if err != nil {
 - `Get(bucketName, key string) ([]byte, error)` - Retrieves a value
 - `Delete(bucketName, key string) error` - Deletes a key-value pair
 - `List(bucketName string) (map[string][]byte, error)` - Lists all pairs
+- `ForEach(bucketName string, fn func(key, value []byte) error) error` - Iterates over all pairs
+- `Buckets() []string` - Returns all bucket names
 - `NewBatch() *BoltBatch` - Creates a new write batch
 
 ### BoltFactory
@@ -144,6 +174,15 @@ if err != nil {
 - `Key []byte` - The key to operate on
 - `Value *[]byte` - The value (nil for delete operations)
 - `Op WriteOp` - The operation type (OpSet or OpDelete)
+
+### BoltDBWrapper
+- `NewBoltDBWrapper(db *BoltDatabase, bucketName string) *BoltDBWrapper` - Creates wrapper
+- `Get(key string) ([]byte, error)` - Retrieves a value from the bucket
+- `Set(key string, value []byte) error` - Stores a key-value pair in the bucket
+- `Delete(key string) error` - Deletes a key from the bucket
+- `List() (map[string][]byte, error)` - Lists all pairs in the bucket
+- `ForEach(fn func(key, value []byte) error) error` - Iterates over all pairs in the bucket
+- `NewBatch() *BoltBatch` - Creates a new write batch
 
 ## Environment Variables
 - `BOLT_DB_DEFAULT_PATH`: Path for the default database (defaults to `"./bolt.db"`)

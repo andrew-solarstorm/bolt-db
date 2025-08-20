@@ -165,7 +165,7 @@ func (b *BoltDatabase) Buckets() []string {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (b *BoltDatabase) ForEach(bucketName string, fn func(bucket, value []byte) error) error {
+func (b *BoltDatabase) ForEach(bucketName string, fn func(key, value []byte) error) error {
 	return b.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
 		if b == nil {
