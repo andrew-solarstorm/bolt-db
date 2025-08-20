@@ -8,7 +8,6 @@ A Go package that provides a convenient factory pattern for managing multiple [B
 - **Thread-Safe Operations**: All factory operations are protected by read-write locks
 - **Dependency Injection Support**: Integrates with `dicontainer-go` package
 - **Bucket-Specific Wrappers**: Simplified interface for working with specific buckets
-- **Service Layer**: High-level service abstractions for common operations
 - **Batch Operations**: Efficient batch processing for multiple write operations
 
 ## Quick Start
@@ -145,11 +144,6 @@ if err != nil {
 - `Key []byte` - The key to operate on
 - `Value *[]byte` - The value (nil for delete operations)
 - `Op WriteOp` - The operation type (OpSet or OpDelete)
-
-### Services
-- `BoltService` - Single database operations with DI support
-- `BoltWrapperService` - Bucket-specific operations with DI support
-- `BoltFactoryService` - Factory operations with DI support
 
 ## Environment Variables
 - `BOLT_DB_DEFAULT_PATH`: Path for the default database (defaults to `"./bolt.db"`)
