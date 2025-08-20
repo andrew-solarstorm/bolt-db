@@ -84,9 +84,19 @@ func (b *BoltBatch) SetDB(db *BoltDatabase) {
 //
 // Returns:
 //   - error: Any error that occurred during execution
-func (b *BoltBatch) ExecuteConcurrent() error {
+func (b *BoltBatch) Execute() error {
 	b.lck.Lock()
 	defer b.lck.Unlock()
+	if len(b.ops) == 0 {
+		return nil
+	}
+
+	if len(b.ops) == 1 {
+		for bucket := range b.ops {
+			return b.execOps(bucket, b.ops[bucket])
+		}
+		return nil
+	}
 
 	wg := errgroup.Group{}
 	semaphore := make(chan struct{}, min(MAX_CONCURRENT_OPERATIONS, len(b.ops)))
@@ -136,22 +146,17 @@ func (b *BoltBatch) execOpsByBucket(tx *bolt.Tx, bucket string, ops []*WriteOper
 	return nil
 }
 
-// Execute executes all operations in the batch sequentially.
-// Operations are grouped by bucket and executed in separate transactions.
-// This method is thread-safe and uses a mutex to prevent concurrent access.
+// execOps executes all operations for a specific bucket within a transaction.
+// This is an internal method used by both Execute and ExecuteSequential.
+//
+// Parameters:
+//   - bucket: The bucket name
+//   - ops: The operations to execute for this bucket
 //
 // Returns:
 //   - error: Any error that occurred during execution
-func (b *BoltBatch) Execute() error {
-	b.lck.Lock()
-	defer b.lck.Unlock()
-	for bucket, ops := range b.ops {
-		err := b.boltdb.db.Batch(func(tx *bolt.Tx) error {
-			return b.execOpsByBucket(tx, bucket, ops)
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func (b *BoltBatch) execOps(bucket string, ops []*WriteOperation) error {
+	return b.boltdb.db.Batch(func(tx *bolt.Tx) error {
+		return b.execOpsByBucket(tx, bucket, ops)
+	})
 }
