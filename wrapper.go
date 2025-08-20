@@ -1,4 +1,4 @@
-package boltfactory
+package boltdb
 
 // BoltDBWrapper provides a simplified interface for working with a specific bucket
 // within a Bolt database. It wraps the BoltDatabase and pre-configures all operations

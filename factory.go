@@ -1,4 +1,4 @@
-package boltfactory
+package boltdb
 
 import (
 	"fmt"

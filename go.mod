@@ -1,4 +1,4 @@
-module github.com/andrew-solarstorm/bolt-db
+module github.com/andrew-solarstorm/boltdb
 
 go 1.24.2
 
