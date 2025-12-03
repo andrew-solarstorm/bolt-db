@@ -28,8 +28,8 @@ func NewBoltFactory(name, defaultPath string) (*BoltFactory, error) {
 	databases := make(map[string]*BoltDatabase)
 	databases[name] = NewBoltDatabase(defaultPath)
 
-	if err := databases[name]; err != nil {
-		return nil, fmt.Errorf("could not open database %s: %v", name, err)
+	if _, ok := databases[name]; !ok {
+		return nil, fmt.Errorf("could not open database %s", name)
 	}
 	return &BoltFactory{databases: databases}, nil
 }
