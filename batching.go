@@ -138,9 +138,13 @@ func (b *BoltBatch) execOpsByBucket(tx *bolt.Tx, bucket string, ops []*WriteOper
 			if op.Value == nil {
 				return errors.New("value is nil")
 			}
-			return boltBucket.Put(op.Key, *op.Value)
+			if err := boltBucket.Put(op.Key, *op.Value); err != nil {
+				return err
+			}
 		case OpDelete:
-			return boltBucket.Delete(op.Key)
+			if err := boltBucket.Delete(op.Key); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
