@@ -56,13 +56,13 @@ func (b *BoltDatabase) Close() error {
 //
 // Returns:
 //   - error: An error if the bucket doesn't exist or deletion fails
-func (b *BoltDatabase) Delete(bucketName string, key string) error {
+func (b *BoltDatabase) Delete(bucketName string, key []byte) error {
 	return b.db.Batch(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket == nil {
 			return errors.New("bucket not found")
 		}
-		return bucket.Delete([]byte(key))
+		return bucket.Delete(key)
 	})
 }
 
@@ -76,13 +76,13 @@ func (b *BoltDatabase) Delete(bucketName string, key string) error {
 //
 // Returns:
 //   - error: An error if the operation fails
-func (b *BoltDatabase) Set(bucketName string, key string, value []byte) error {
+func (b *BoltDatabase) Set(bucketName string, key, value []byte) error {
 	return b.db.Batch(func(tx *bolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
 			return err
 		}
-		return bucket.Put([]byte(key), value)
+		return bucket.Put(key, value)
 	})
 }
 
@@ -96,7 +96,7 @@ func (b *BoltDatabase) Set(bucketName string, key string, value []byte) error {
 // Returns:
 //   - []byte: The value associated with the key, or nil if not found
 //   - error: Any error that occurred during the operation
-func (b *BoltDatabase) Get(bucketName, key string) ([]byte, error) {
+func (b *BoltDatabase) Get(bucketName string, key []byte) ([]byte, error) {
 	var result []byte
 	err := b.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bucketName))

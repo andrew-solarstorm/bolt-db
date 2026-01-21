@@ -40,7 +40,7 @@ func NewBoltDBWrapper(db *BoltDatabase, bucketName string) *BoltDBWrapper {
 // Returns:
 //   - []byte: The value associated with the key, or nil if not found
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Get(key string) ([]byte, error) {
+func (w *BoltDBWrapper) Get(key []byte) ([]byte, error) {
 	return w.db.Get(w.bucketName, key)
 }
 
@@ -53,7 +53,7 @@ func (w *BoltDBWrapper) Get(key string) ([]byte, error) {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Set(key string, value []byte) error {
+func (w *BoltDBWrapper) Set(key, value []byte) error {
 	return w.db.Set(w.bucketName, key, value)
 }
 
@@ -65,7 +65,7 @@ func (w *BoltDBWrapper) Set(key string, value []byte) error {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Delete(key string) error {
+func (w *BoltDBWrapper) Delete(key []byte) error {
 	return w.db.Delete(w.bucketName, key)
 }
 
