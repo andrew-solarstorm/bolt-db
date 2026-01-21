@@ -104,7 +104,7 @@ func (b *BoltDatabase) Get(bucketName string, key []byte) ([]byte, error) {
 			return nil
 		}
 
-		result = bucket.Get([]byte(key))
+		result = bucket.Get(key)
 		return nil
 	})
 
