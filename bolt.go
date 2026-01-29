@@ -176,3 +176,17 @@ func (b *BoltDatabase) ForEach(bucketName string, fn func(key, value []byte) err
 		})
 	})
 }
+
+func (b *BoltDatabase) Write(fn func(tx *bolt.Tx) error) error {
+	return b.db.Batch(fn)
+}
+
+func (b *BoltDatabase) Read(fn func(tx *bolt.Tx) error) error {
+	return b.db.View(fn)
+}
+
+func (b *BoltDatabase) DropBucket(bucketName string) error {
+	return b.db.Batch(func(tx *bolt.Tx) error {
+		return tx.DeleteBucket([]byte(bucketName))
+	})
+}
