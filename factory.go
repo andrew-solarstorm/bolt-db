@@ -105,6 +105,10 @@ func (f *BoltFactory) CloseAll() error {
 
 	// Close databases directly to avoid deadlock (don't call f.Close which also locks)
 	for name, db := range f.databases {
+		// Skip nil databases (failed initialization)
+		if db == nil {
+			continue
+		}
 		if err := db.Close(); err != nil {
 			return fmt.Errorf("failed to close database %s: %w", name, err)
 		}
