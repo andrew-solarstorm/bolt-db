@@ -103,11 +103,15 @@ func (f *BoltFactory) CloseAll() error {
 	f.lck.Lock()
 	defer f.lck.Unlock()
 
-	for name := range f.databases {
-		if err := f.Close(name); err != nil {
-			return err
+	// Close databases directly to avoid deadlock (don't call f.Close which also locks)
+	for name, db := range f.databases {
+		if err := db.Close(); err != nil {
+			return fmt.Errorf("failed to close database %s: %w", name, err)
 		}
 	}
+
+	// Clear the map after closing all databases
+	f.databases = make(map[string]*BoltDatabase)
 	return nil
 }
 
