@@ -1,12 +1,12 @@
-package boltdb
+package bolt_db
 
-// BoltDBWrapper provides a simplified interface for working with a specific bucket
+// DBWrapper provides a simplified interface for working with a specific bucket
 // within a Bolt database. It wraps the BoltDatabase and pre-configures all operations
 // to work with a single bucket, eliminating the need to specify the bucket name
 // for each operation.
-type BoltDBWrapper struct {
-	db         *BoltDatabase // The underlying database instance
-	bucketName string        // The bucket name this wrapper operates on
+type DBWrapper struct {
+	db     IDatabase // The underlying database instance
+	bucket []byte    // The bucket name this wrapper operates on
 }
 
 // NewBatch creates a new write batch for the database.
@@ -14,11 +14,11 @@ type BoltDBWrapper struct {
 //
 // Returns:
 //   - *BoltBatch: A new write batch instance
-func (w *BoltDBWrapper) NewBatch() *BoltBatch {
+func (w *DBWrapper) NewBatch() *Batch {
 	return w.db.NewBatch()
 }
 
-// NewBoltDBWrapper creates a new wrapper for a specific bucket within a database.
+// NewDBWrapper creates a new wrapper for a specific bucket within a database.
 // All operations performed through this wrapper will target the specified bucket.
 //
 // Parameters:
@@ -27,8 +27,8 @@ func (w *BoltDBWrapper) NewBatch() *BoltBatch {
 //
 // Returns:
 //   - *BoltDBWrapper: A new wrapper instance
-func NewBoltDBWrapper(db *BoltDatabase, bucketName string) *BoltDBWrapper {
-	return &BoltDBWrapper{db: db, bucketName: bucketName}
+func NewDBWrapper(db IDatabase, bucket []byte) *DBWrapper {
+	return &DBWrapper{db: db, bucket: bucket}
 }
 
 // Get retrieves a value from the configured bucket.
@@ -40,8 +40,8 @@ func NewBoltDBWrapper(db *BoltDatabase, bucketName string) *BoltDBWrapper {
 // Returns:
 //   - []byte: The value associated with the key, or nil if not found
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Get(key []byte) ([]byte, error) {
-	return w.db.Get(w.bucketName, key)
+func (w *DBWrapper) Get(key []byte) ([]byte, error) {
+	return w.db.Get(w.bucket, key)
 }
 
 // Set stores a value in the configured bucket.
@@ -53,8 +53,8 @@ func (w *BoltDBWrapper) Get(key []byte) ([]byte, error) {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Set(key, value []byte) error {
-	return w.db.Set(w.bucketName, key, value)
+func (w *DBWrapper) Set(key, value []byte) error {
+	return w.db.Set(w.bucket, key, value)
 }
 
 // Delete removes a key from the configured bucket.
@@ -65,8 +65,8 @@ func (w *BoltDBWrapper) Set(key, value []byte) error {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) Delete(key []byte) error {
-	return w.db.Delete(w.bucketName, key)
+func (w *DBWrapper) Delete(key []byte) error {
+	return w.db.Delete(w.bucket, key)
 }
 
 // List returns all key-value pairs from the configured bucket.
@@ -75,8 +75,8 @@ func (w *BoltDBWrapper) Delete(key []byte) error {
 // Returns:
 //   - map[string][]byte: A map of all key-value pairs in the bucket
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) List() (map[string][]byte, error) {
-	return w.db.List(w.bucketName)
+func (w *DBWrapper) List() (map[string][]byte, error) {
+	return w.db.List(w.bucket)
 }
 
 // ForEach iterates over all key-value pairs in the configured bucket.
@@ -87,6 +87,6 @@ func (w *BoltDBWrapper) List() (map[string][]byte, error) {
 //
 // Returns:
 //   - error: Any error that occurred during the operation
-func (w *BoltDBWrapper) ForEach(fn func(key, value []byte) error) error {
-	return w.db.ForEach(w.bucketName, fn)
+func (w *DBWrapper) ForEach(fn func(key, value []byte) error) error {
+	return w.db.ForEach(w.bucket, fn)
 }

@@ -1,17 +1,17 @@
-package boltdb
+package bolt_db
 
 import (
 	"fmt"
 	"sync"
 )
 
-// BoltFactory manages multiple Bolt database instances with thread-safe operations.
+// Factory manages multiple Bolt database instances with thread-safe operations.
 // It provides a centralized way to create, access, and manage multiple databases
 // with different names and file paths. All operations are protected by read-write locks
 // to ensure thread safety in concurrent environments.
-type BoltFactory struct {
-	lck       sync.RWMutex             // Read-write lock for thread-safe operations
-	databases map[string]*BoltDatabase // Map of database names to database instances
+type Factory struct {
+	lck       sync.RWMutex   // Read-write lock for thread-safe operations
+	databases map[string]*DB // Map of database names to database instances
 }
 
 // NewBoltFactory creates a new factory instance with an initial database.
@@ -24,14 +24,14 @@ type BoltFactory struct {
 // Returns:
 //   - *BoltFactory: A new factory instance
 //   - error: An error if the initial database cannot be created
-func NewBoltFactory(name, defaultPath string) (*BoltFactory, error) {
-	databases := make(map[string]*BoltDatabase)
-	databases[name] = NewBoltDatabase(defaultPath)
+func NewBoltFactory(name, defaultPath string) (*Factory, error) {
+	databases := make(map[string]*DB)
+	databases[name] = NewDB(defaultPath)
 
 	if _, ok := databases[name]; !ok {
 		return nil, fmt.Errorf("could not open database %s", name)
 	}
-	return &BoltFactory{databases: databases}, nil
+	return &Factory{databases: databases}, nil
 }
 
 // GetDatabases returns a list of all database names currently managed by the factory.
@@ -40,7 +40,7 @@ func NewBoltFactory(name, defaultPath string) (*BoltFactory, error) {
 // Returns:
 //   - []string: A slice of database names
 //   - error: Any error that occurred during the operation
-func (f *BoltFactory) GetDatabases() ([]string, error) {
+func (f *Factory) GetDatabases() ([]string, error) {
 	f.lck.RLock()
 	defer f.lck.RUnlock()
 
@@ -62,10 +62,16 @@ func (f *BoltFactory) GetDatabases() ([]string, error) {
 // Returns:
 //   - *BoltDatabase: The newly created database instance
 //   - error: Any error that occurred during creation
-func (f *BoltFactory) Open(name, path string) (*BoltDatabase, error) {
+func (f *Factory) Open(name, path string) (*DB, error) {
 	f.lck.Lock()
 	defer f.lck.Unlock()
-	f.databases[name] = NewBoltDatabase(path)
+	
+	// Close old database if exists to prevent file lock conflicts
+	if oldDB, exists := f.databases[name]; exists && oldDB != nil {
+		oldDB.Close()
+	}
+	
+	f.databases[name] = NewDB(path)
 	return f.databases[name], nil
 }
 
@@ -77,7 +83,7 @@ func (f *BoltFactory) Open(name, path string) (*BoltDatabase, error) {
 //
 // Returns:
 //   - error: An error if the database doesn't exist or closing fails
-func (f *BoltFactory) Close(name string) error {
+func (f *Factory) Close(name string) error {
 	f.lck.Lock()
 	defer f.lck.Unlock()
 
@@ -99,7 +105,7 @@ func (f *BoltFactory) Close(name string) error {
 //
 // Returns:
 //   - error: Any error that occurred during the closing process
-func (f *BoltFactory) CloseAll() error {
+func (f *Factory) CloseAll() error {
 	f.lck.Lock()
 	defer f.lck.Unlock()
 
@@ -115,7 +121,7 @@ func (f *BoltFactory) CloseAll() error {
 	}
 
 	// Clear the map after closing all databases
-	f.databases = make(map[string]*BoltDatabase)
+	f.databases = make(map[string]*DB)
 	return nil
 }
 
@@ -128,7 +134,7 @@ func (f *BoltFactory) CloseAll() error {
 // Returns:
 //   - *BoltDatabase: The database instance, or nil if not found
 //   - error: An error if the database doesn't exist
-func (f *BoltFactory) Get(name string) (*BoltDatabase, error) {
+func (f *Factory) Get(name string) (*DB, error) {
 	f.lck.RLock()
 	defer f.lck.RUnlock()
 
