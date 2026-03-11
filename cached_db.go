@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // cached represents a single cached entry with metadata for cache management.
@@ -32,12 +33,12 @@ type cached struct {
 //  2. Time since last persist exceeds updateInterval
 //  3. Manual Flush() is called
 type CachedDB struct {
-	db              *DB                                         // Underlying database instance
-	store           *InMemKV[string, *InMemKV[string, *cached]] // Two-level cache: bucket -> key -> cached data
-	updateThreshold int                                         // Number of updates before persistence check
-	updateInterval  time.Duration                               // Maximum time between disk writes
-	deleteInterval  time.Duration                               // Time of inactivity before cache eviction
-	lck             sync.RWMutex                                // Lock for coordinating multi-DB transactions
+	db              *DB                                             // Underlying database instance
+	store           *lru.Cache[string, *lru.Cache[string, *cached]] // Two-level cache: bucket -> key -> cached data
+	updateThreshold int                                             // Number of updates before persistence check
+	updateInterval  time.Duration                                   // Maximum time between disk writes
+	deleteInterval  time.Duration                                   // Time of inactivity before cache eviction
+	lck             sync.RWMutex                                    // Lock for coordinating multi-DB transactions
 }
 
 // copy creates a deep copy of byte slice data to prevent external modifications
@@ -88,9 +89,13 @@ func NewCachedDB(
 	if deleteInterval <= 0 {
 		deleteInterval = 15 * time.Minute
 	}
+	store, err := lru.New[string, *lru.Cache[string, *cached]](10000)
+	if err != nil {
+		return nil
+	}
 	return &CachedDB{
 		db:              db,
-		store:           NewInmemMap[string, *InMemKV[string, *cached]](),
+		store:           store,
 		updateThreshold: updateThreshold,
 		updateInterval:  updateInterval,
 		deleteInterval:  deleteInterval,
@@ -117,9 +122,9 @@ func (cd *CachedDB) Name() string {
 //   - []byte: A copy of the cached or retrieved data, or nil if not found
 //   - error: Any error that occurred during the operation
 func (cd *CachedDB) Get(bucket, key []byte) ([]byte, error) {
-	b := cd.store.Get(string(bucket))
+	b, _ := cd.store.Get(string(bucket))
 	if b != nil {
-		c := b.Get(string(key))
+		c, _ := b.Get(string(key))
 		if c != nil {
 			return cd.copy(c.data), nil
 		}
@@ -130,14 +135,17 @@ func (cd *CachedDB) Get(bucket, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	b = cd.store.Get(string(bucket))
+	b, _ = cd.store.Get(string(bucket))
 	if b == nil {
-		b = NewInmemMap[string, *cached]()
-		cd.store.Set(string(bucket), b)
+		b, err = lru.New[string, *cached](10000)
+		if err != nil {
+			return nil, err
+		}
+		cd.store.Add(string(bucket), b)
 	}
 
 	now := time.Now()
-	b.Set(string(key), &cached{
+	b.Add(string(key), &cached{
 		data:     cd.copy(data),
 		updates:  0,
 		storedAt: now,
@@ -159,13 +167,16 @@ func (cd *CachedDB) Get(bucket, key []byte) ([]byte, error) {
 // Returns:
 //   - error: Any error that occurred during the operation
 func (cd *CachedDB) Set(bucket, key []byte, data []byte) error {
-	b := cd.store.Get(string(bucket))
+	b, _ := cd.store.Get(string(bucket))
 	if b == nil {
-		b = NewInmemMap[string, *cached]()
-		cd.store.Set(string(bucket), b)
+		b, err := lru.New[string, *cached](10000)
+		if err != nil {
+			return err
+		}
+		cd.store.Add(string(bucket), b)
 	}
 
-	item := b.Get(string(key))
+	item, _ := b.Get(string(key))
 	now := time.Now()
 	if item == nil {
 		item = &cached{
@@ -174,7 +185,7 @@ func (cd *CachedDB) Set(bucket, key []byte, data []byte) error {
 			storedAt: now,
 			updateAt: now,
 		}
-		b.Set(string(key), item)
+		b.Add(string(key), item)
 	} else {
 		item.data = cd.copy(data)
 		item.updates++
@@ -204,9 +215,9 @@ func (cd *CachedDB) Set(bucket, key []byte, data []byte) error {
 //   - bool: true if the key exists, false otherwise
 //   - error: Any error that occurred during the operation
 func (cd *CachedDB) Exist(bucket, key []byte) (bool, error) {
-	b := cd.store.Get(string(bucket))
+	b, _ := cd.store.Get(string(bucket))
 	if b != nil {
-		exists := b.Exists(string(key))
+		_, exists := b.Get(string(key))
 		if exists {
 			return true, nil
 		}
@@ -228,9 +239,9 @@ func (cd *CachedDB) Exist(bucket, key []byte) (bool, error) {
 // Returns:
 //   - error: Any error that occurred during the operation
 func (cd *CachedDB) Delete(bucket, key []byte) error {
-	b := cd.store.Get(string(bucket))
+	b, _ := cd.store.Get(string(bucket))
 	if b != nil {
-		b.Delete(string(key))
+		b.Remove(string(key))
 	}
 
 	return cd.db.Delete(bucket, key)
@@ -265,18 +276,6 @@ func (cd *CachedDB) canSave(item *cached) bool {
 	return false
 }
 
-// canDelete determines if a cached item should be evicted from cache.
-// Eviction occurs when the item has been inactive for longer than deleteInterval.
-//
-// Parameters:
-//   - item: The cached item to evaluate
-//
-// Returns:
-//   - bool: true if the item should be evicted from cache
-func (cd *CachedDB) canDelete(item *cached) bool {
-	return time.Since(item.updateAt) >= cd.deleteInterval
-}
-
 // Flush persists all cached data to disk and evicts inactive entries.
 // For each bucket and key in the cache:
 //   - If inactive for > deleteInterval, evict from cache
@@ -290,12 +289,20 @@ func (cd *CachedDB) canDelete(item *cached) bool {
 // Returns:
 //   - error: Any error that occurred during flushing
 func (cd *CachedDB) Flush() error {
-	err := cd.store.ForEach(func(bucketName string, bucket *InMemKV[string, *cached]) error {
-		return bucket.ForEach(func(key string, item *cached) error {
-			if cd.canDelete(item) {
-				bucket.Delete(key)
-				return nil
+	bucketNames := cd.store.Keys()
+	for _, bucketName := range bucketNames {
+		bucket, ok := cd.store.Get(bucketName)
+		if !ok {
+			continue
+		}
+
+		keys := bucket.Keys()
+		for _, key := range keys {
+			item, ok := bucket.Get(key)
+			if !ok {
+				continue
 			}
+
 			if item.updates > 0 {
 				if err := cd.db.Set([]byte(bucketName), []byte(key), item.data); err != nil {
 					return err
@@ -303,10 +310,9 @@ func (cd *CachedDB) Flush() error {
 				item.updates = 0
 				item.storedAt = time.Now()
 			}
-			return nil
-		})
-	})
-	return err
+		}
+	}
+	return nil
 }
 
 // Close flushes all cached data, clears the cache, and closes the underlying database.
@@ -318,7 +324,7 @@ func (cd *CachedDB) Close() error {
 	if err := cd.Flush(); err != nil {
 		return err
 	}
-	cd.store.Clear()
+	cd.store.Purge()
 	return cd.db.Close()
 }
 
@@ -333,18 +339,23 @@ func (cd *CachedDB) Close() error {
 // Returns:
 //   - error: Any error that occurred during iteration
 func (cd *CachedDB) ForEach(bucket []byte, fn func(key []byte, value []byte) error) error {
-	b := cd.store.Get(string(bucket))
-	if b != nil {
+	b, ok := cd.store.Get(string(bucket))
+	if ok && b != nil {
 		visited := make(map[string]struct{})
-		err := b.ForEach(func(k string, item *cached) error {
-			if _, ok := visited[k]; ok {
-				return nil
+
+		keys := b.Keys()
+		for _, k := range keys {
+			if _, alreadyVisited := visited[k]; alreadyVisited {
+				continue
+			}
+			item, exists := b.Get(k)
+			if !exists {
+				continue
 			}
 			visited[k] = struct{}{}
-			return fn([]byte(k), item.data)
-		})
-		if err != nil {
-			return err
+			if err := fn([]byte(k), item.data); err != nil {
+				return err
+			}
 		}
 
 		wrapFn := func(k []byte, v []byte) error {
@@ -372,7 +383,7 @@ func (cd *CachedDB) ForEach(bucket []byte, fn func(key []byte, value []byte) err
 // Returns:
 //   - error: Any error that occurred during the transaction
 func (cd *CachedDB) Write(fn func(tx *bolt.Tx) error) error {
-	defer cd.store.Clear()
+	defer cd.store.Purge()
 	return cd.db.Write(fn)
 }
 
@@ -434,7 +445,7 @@ func (cd *CachedDB) Buckets() [][]byte {
 // Returns:
 //   - error: Any error that occurred during the operation
 func (cd *CachedDB) DropBucket(bucketName string) error {
-	cd.store.Delete(bucketName)
+	cd.store.Remove(bucketName)
 	_ = cd.db.DropBucket(bucketName)
 	return nil
 }
