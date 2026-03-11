@@ -8,6 +8,7 @@ import (
 )
 
 type IDatabase interface {
+	Exist(bucket, key []byte) (bool, error)
 	Get(bucket, key []byte) ([]byte, error)
 	Set(bucket, key, value []byte) error
 	Delete(bucket, key []byte) error
@@ -20,6 +21,21 @@ type IDatabase interface {
 	Buckets() [][]byte
 	DropBucket(bucketName string) error
 	executeBatch(ops map[string][]*WriteOperation) error
+	Lock()
+	Unlock()
+	Name() string
+}
+
+type GenericIDatabase[V any] interface {
+	Exist(bucket, key []byte) (bool, error)
+	Get(bucket, key []byte) (*V, error)
+	Set(bucket, key []byte, value *V) error
+	Delete(bucket, key []byte) error
+	Close() error
+	ForEach(bucket []byte, fn func(key []byte, value *V) error) error
+	List(bucket []byte) (map[string]*V, error)
+	Buckets() [][]byte
+	DropBucket(bucketName string) error
 	Lock()
 	Unlock()
 	Name() string
@@ -64,6 +80,19 @@ func (d *DB) Name() string {
 //   - *BoltBatch: A new write batch instance
 func (d *DB) NewBatch() *Batch {
 	return NewBatch(d)
+}
+
+func (d *DB) Exist(bucket, key []byte) (bool, error) {
+	var result bool
+	err := d.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucket)
+		if b == nil {
+			return nil
+		}
+		result = b.Get(key) != nil
+		return nil
+	})
+	return result, err
 }
 
 // Close closes the database connection and releases all resources.

@@ -169,7 +169,8 @@ func (cd *CachedDB) Get(bucket, key []byte) ([]byte, error) {
 func (cd *CachedDB) Set(bucket, key []byte, data []byte) error {
 	b, _ := cd.store.Get(string(bucket))
 	if b == nil {
-		b, err := lru.New[string, *cached](10000)
+		var err error
+		b, err = lru.New[string, *cached](10000)
 		if err != nil {
 			return err
 		}

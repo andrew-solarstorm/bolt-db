@@ -6,7 +6,7 @@ import "github.com/boltdb/bolt"
 // It wraps a DB instance and handles encoding/decoding of generic types to/from bytes.
 // Default encoding uses gob serialization, but custom encoders/decoders can be provided.
 type GenericDB[T any] struct {
-	db *DB // Underlying database instance
+	db IDatabase // Underlying database instance
 
 	dec func(d []byte, out any) error // Decoder function (gob by default)
 	enc func(in any) ([]byte, error)  // Encoder function (gob by default)
@@ -23,7 +23,7 @@ type GenericDB[T any] struct {
 // Returns:
 //   - *GenericDB[T]: A new type-safe database instance
 func NewGenericDB[T any](
-	db *DB,
+	db IDatabase,
 	dec func(d []byte, out any) error,
 	enc func(in any) ([]byte, error),
 ) *GenericDB[T] {
@@ -60,7 +60,9 @@ func (d *GenericDB[T]) Get(bucket, key []byte) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+
+	copied := *out
+	return &copied, nil
 }
 
 // Set stores a typed value in the specified bucket and key.

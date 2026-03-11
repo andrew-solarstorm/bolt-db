@@ -42,7 +42,7 @@ func NewShardDB(factory *Factory, dbPath string, shards int, useCache bool) (*Sh
 
 	shardDBs := NewInmemMap[int, IDatabase]()
 
-	for i := 0; i < shards; i++ {
+	for i := range shards {
 		shardDB, err := factory.Open(fmt.Sprintf("%s_shard%d", dbPath, i), fmt.Sprintf("%s_shard%d.db", dbPath, i))
 		if err != nil {
 			return nil, fmt.Errorf("failed to open shard %d: %w", i, err)
@@ -292,4 +292,17 @@ func (s *ShardDB) executeBatch(ops map[string][]*WriteOperation) error {
 func (s *ShardDB) GetShardForBucket(bucket []byte) (IDatabase, error) {
 	shard := s.getShard(bucket)
 	return s.getShardDB(shard)
+}
+
+func (s *ShardDB) Exist(bucket, key []byte) (bool, error) {
+	shard := s.getShard(bucket)
+	db, err := s.getShardDB(shard)
+	if err != nil {
+		return false, err
+	}
+	exists, err := db.Exist(bucket, key)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
 }
